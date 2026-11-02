@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMyOrganizerEventsService = exports.getEventVouchersService = exports.createEventVoucherService = exports.updateEventService = exports.createEventService = exports.validateTicketStockService = exports.getEventByIdService = exports.getCategoriesService = exports.getEventsService = void 0;
+exports.deleteEventService = exports.getMyOrganizerEventsService = exports.getEventVouchersService = exports.createEventVoucherService = exports.updateEventService = exports.createEventService = exports.validateTicketStockService = exports.getEventByIdService = exports.getCategoriesService = exports.getEventsService = void 0;
 const prisma_1 = require("../lib/prisma");
 const getEventsService = async (params) => {
     const { search, category, city, date, price, sort, page = 1, limit = 6 } = params;
@@ -398,19 +398,49 @@ const updateEventService = async (eventId, organizerId, input) => {
         if (input.tickets && Array.isArray(input.tickets) && input.tickets.length > 0) {
             // Re-calculate PRD Section 8.4 invariant: available_seats = sum(quota)
             newAvailableSeats = input.tickets.reduce((sum, t) => sum + Number(t.quota), 0);
-            // Re-create updated ticket tiers
-            await tx.ticketType.deleteMany({
-                where: { event_id: eventId },
-            });
-            await tx.ticketType.createMany({
-                data: input.tickets.map((t) => ({
-                    event_id: eventId,
-                    name: t.name,
-                    price: Number(t.price),
-                    quota: Number(t.quota),
-                    available_quota: Number(t.quota),
-                })),
-            });
+            const existingTiers = existingEvent.ticket_types || [];
+            const incomingTicketIds = new Set(input.tickets.map((t) => t.id).filter((id) => Boolean(id)));
+            // Cek tier lama yang dihapus dari form
+            const tiersToDelete = existingTiers.filter((t) => !incomingTicketIds.has(t.id));
+            for (const tier of tiersToDelete) {
+                const hasTransactions = await tx.transactionItem.findFirst({
+                    where: { ticket_type_id: tier.id },
+                });
+                if (hasTransactions) {
+                    throw new Error(`Tipe tiket '${tier.name}' tidak dapat dihapus karena sudah memiliki transaksi terkait.`);
+                }
+                await tx.ticketType.delete({
+                    where: { id: tier.id },
+                });
+            }
+            // Update atau buat tier baru
+            for (const t of input.tickets) {
+                if (t.id && existingTiers.some((et) => et.id === t.id)) {
+                    const oldTier = existingTiers.find((et) => et.id === t.id);
+                    const quotaDifference = Number(t.quota) - oldTier.quota;
+                    const newAvailableQuota = Math.max(0, oldTier.available_quota + quotaDifference);
+                    await tx.ticketType.update({
+                        where: { id: t.id },
+                        data: {
+                            name: t.name,
+                            price: Number(t.price),
+                            quota: Number(t.quota),
+                            available_quota: newAvailableQuota,
+                        },
+                    });
+                }
+                else {
+                    await tx.ticketType.create({
+                        data: {
+                            event_id: eventId,
+                            name: t.name,
+                            price: Number(t.price),
+                            quota: Number(t.quota),
+                            available_quota: Number(t.quota),
+                        },
+                    });
+                }
+            }
         }
         const updatedEvent = await tx.event.update({
             where: { id: eventId },
@@ -555,3 +585,26 @@ const getMyOrganizerEventsService = async (organizerId) => {
     });
 };
 exports.getMyOrganizerEventsService = getMyOrganizerEventsService;
+const deleteEventService = async (eventId, organizerId) => {
+    // 1. Cari event beserta jumlah transaksinya
+    const event = await prisma_1.prisma.event.findUnique({
+        where: { id: eventId },
+        include: {
+            _count: {
+                select: { transactions: true },
+            },
+        },
+    });
+    if (!event) {
+        throw new Error('Event tidak ditemukan');
+    }
+    // 3. Validasi aturan finansial: tidak boleh hapus event yang sudah memiliki transaksi
+    if (event._count.transactions > 0) {
+        throw new Error('Event tidak dapat dihapus karena sudah memiliki riwayat transaksi / pembelian tiket.');
+    }
+    // 4. Hapus event dari database (relasi tiket, voucher, dll. otomatis terhapus via cascade)
+    return await prisma_1.prisma.event.delete({
+        where: { id: eventId },
+    });
+};
+exports.deleteEventService = deleteEventService;

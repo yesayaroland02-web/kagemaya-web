@@ -327,6 +327,7 @@ export default function EditEventPage() {
       formData.append('end_date', end.toISOString());
 
       const ticketsData = tickets.map((t) => ({
+        id: t.id && !t.id.startsWith('tier-') ? t.id : undefined,
         name: t.name,
         price: Number(t.price),
         quota: Number(t.quota),
