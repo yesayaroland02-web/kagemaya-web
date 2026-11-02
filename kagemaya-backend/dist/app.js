@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const path_1 = __importDefault(require("path"));
+const review_router_1 = __importDefault(require("./routes/review.router"));
 // Import Routers
 const auth_router_1 = __importDefault(require("./routes/auth.router"));
 const event_router_1 = __importDefault(require("./routes/event.router"));
@@ -56,6 +57,8 @@ app.use('/api/transactions', transaction_router_1.default);
 app.use('/api/wishlists', wishlist_router_1.default);
 app.use('/api', follow_router_1.default); // Mounts /api/follows/:organizerId and /api/organizers/:id
 app.use('/api', discussion_router_1.default); // Mounts /api/events/:id/discussions and /api/discussions/:id/pin
+// CARD DAY 19 - Post-Event Rating & Review
+app.use('/api', review_router_1.default);
 // Initialize Background Cron Scheduler (Auto-Expire Transaksi)
 (0, expireTransaction_job_1.initExpireTransactionCron)();
 exports.default = app;

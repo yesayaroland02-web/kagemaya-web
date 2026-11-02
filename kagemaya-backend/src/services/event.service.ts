@@ -585,20 +585,57 @@ export const updateEventService = async (
         0
       );
 
-      // Re-create updated ticket tiers
-      await tx.ticketType.deleteMany({
-        where: { event_id: eventId },
-      });
+      const existingTiers = existingEvent.ticket_types || [];
+      const incomingTicketIds = new Set(
+        input.tickets.map((t) => t.id).filter((id) => Boolean(id))
+      );
 
-      await tx.ticketType.createMany({
-        data: input.tickets.map((t) => ({
-          event_id: eventId,
-          name: t.name,
-          price: Number(t.price),
-          quota: Number(t.quota),
-          available_quota: Number(t.quota),
-        })),
-      });
+      // Check which existing tiers can be safely deleted or if they have transactions
+      const tiersToDelete = existingTiers.filter((t) => !incomingTicketIds.has(t.id));
+      for (const tier of tiersToDelete) {
+        const hasTransactions = await tx.transactionItem.findFirst({
+          where: { ticket_type_id: tier.id },
+        });
+        if (hasTransactions) {
+          throw new Error(
+            `Tipe tiket '${tier.name}' tidak dapat dihapus karena sudah memiliki transaksi terkait.`
+          );
+        }
+        await tx.ticketType.delete({
+          where: { id: tier.id },
+        });
+      }
+
+      // Upsert / update existing ticket types & insert new ones
+      for (const t of input.tickets) {
+        if (t.id && existingTiers.some((et) => et.id === t.id)) {
+          const oldTier = existingTiers.find((et) => et.id === t.id);
+          const quotaDifference = Number(t.quota) - (oldTier ? oldTier.quota : 0);
+          const newAvailableQuota = oldTier
+            ? Math.max(0, oldTier.available_quota + quotaDifference)
+            : Number(t.quota);
+
+          await tx.ticketType.update({
+            where: { id: t.id },
+            data: {
+              name: t.name,
+              price: Number(t.price),
+              quota: Number(t.quota),
+              available_quota: newAvailableQuota,
+            },
+          });
+        } else {
+          await tx.ticketType.create({
+            data: {
+              event_id: eventId,
+              name: t.name,
+              price: Number(t.price),
+              quota: Number(t.quota),
+              available_quota: Number(t.quota),
+            },
+          });
+        }
+      }
     }
 
     const updatedEvent = await tx.event.update({

@@ -482,7 +482,7 @@ const updateEventService = async (eventId, organizerId, input) => {
             newAvailableSeats = input.tickets.reduce((sum, t) => sum + Number(t.quota), 0);
             const existingTiers = existingEvent.ticket_types || [];
             const incomingTicketIds = new Set(input.tickets.map((t) => t.id).filter((id) => Boolean(id)));
-            // Cek tier lama yang dihapus dari form
+            // Check which existing tiers can be safely deleted or if they have transactions
             const tiersToDelete = existingTiers.filter((t) => !incomingTicketIds.has(t.id));
             for (const tier of tiersToDelete) {
                 const hasTransactions = await tx.transactionItem.findFirst({
@@ -495,12 +495,14 @@ const updateEventService = async (eventId, organizerId, input) => {
                     where: { id: tier.id },
                 });
             }
-            // Update atau buat tier baru
+            // Upsert / update existing ticket types & insert new ones
             for (const t of input.tickets) {
                 if (t.id && existingTiers.some((et) => et.id === t.id)) {
                     const oldTier = existingTiers.find((et) => et.id === t.id);
-                    const quotaDifference = Number(t.quota) - oldTier.quota;
-                    const newAvailableQuota = Math.max(0, oldTier.available_quota + quotaDifference);
+                    const quotaDifference = Number(t.quota) - (oldTier ? oldTier.quota : 0);
+                    const newAvailableQuota = oldTier
+                        ? Math.max(0, oldTier.available_quota + quotaDifference)
+                        : Number(t.quota);
                     await tx.ticketType.update({
                         where: { id: t.id },
                         data: {

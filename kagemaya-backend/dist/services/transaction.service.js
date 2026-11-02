@@ -1,16 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-<<<<<<< HEAD
 exports.rejectTransactionService = exports.acceptTransactionService = exports.getOrganizerTransactionsService = exports.autoExpireOldTransactionsService = exports.cancelTransactionService = exports.rollbackTransactionCore = exports.uploadPaymentProofService = exports.getUserTransactionsService = exports.getTransactionByIdService = exports.createTransactionService = exports.calculateCheckoutPriceService = void 0;
 const client_1 = require("@prisma/client");
 const prisma_1 = require("../lib/prisma");
 const cloudinary_1 = require("../config/cloudinary");
-=======
-exports.autoExpireOldTransactionsService = exports.cancelTransactionService = exports.rollbackTransactionCore = exports.uploadPaymentProofService = exports.getUserTransactionsService = exports.getTransactionByIdService = exports.createTransactionService = exports.calculateCheckoutPriceService = void 0;
-const prisma_1 = require("../lib/prisma");
-const cloudinary_1 = require("../config/cloudinary");
-const client_1 = require("@prisma/client");
->>>>>>> FTR-006-FE-and-BE-Organizer
 // =========================================================
 // 1. CALCULATION ENGINE (DRY RUN / PREVIEW)
 // Total Bayar = (Harga Tiket - Diskon Voucher - Diskon Kupon) - Poin
@@ -610,7 +603,6 @@ const autoExpireOldTransactionsService = async () => {
     return { count: processedCount };
 };
 exports.autoExpireOldTransactionsService = autoExpireOldTransactionsService;
-<<<<<<< HEAD
 // =========================================================
 // 9. ORGANIZER: GET INCOMING TRANSACTIONS FOR MY EVENTS
 // =========================================================
@@ -804,5 +796,3 @@ const rejectTransactionService = async (transactionId, organizerId, reason) => {
     });
 };
 exports.rejectTransactionService = rejectTransactionService;
-=======
->>>>>>> FTR-006-FE-and-BE-Organizer
